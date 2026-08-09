@@ -603,18 +603,55 @@ Environment Variables:
     CODEX_TIMEOUT              Timeout in milliseconds (default: 21600000)
     CODEX_INACTIVITY_TIMEOUT   Stdout inactivity timeout in milliseconds (default: 1800000, 0 disables)
     CODEX_REQUIRE_APPROVAL     Require manual approval for file operations (default: false)
-    CODEX_SANDBOX              Set to read-only (case-insensitive, surrounding
-                               whitespace ignored) to run codex in a read-only
-                               sandbox: writes and kills are denied, which suits
-                               reviewers and other read-only delegates. It takes
-                               precedence over the approval bypass below.
+    CODEX_SANDBOX              Two recognised values (case-insensitive, surrounding
+                               whitespace ignored), both taking precedence over the
+                               approval bypass below:
+                                 read-only       writes and kills denied; suits
+                                                 reviewers and other delegates that
+                                                 never need FS-write. Also denies
+                                                 network: ssh fails in connect(),
+                                                 before authentication.
+                                 workspace-write for delegates that must reach the
+                                                 network, such as remote diagnosis
+                                                 over ssh. Writes are confined to the
+                                                 workspace; network is on. The whole
+                                                 policy is pinned by flag, not read
+                                                 from config, so the tier means the
+                                                 same thing on every machine:
+                                                 network_access on, writable_roots
+                                                 cleared, /tmp and $TMPDIR excluded
+                                                 (both are writable roots by default
+                                                 otherwise), the user/project rules
+                                                 file ignored (an "allow" rule would
+                                                 let a matching command leave the
+                                                 sandbox entirely; protective
+                                                 "forbidden" and "prompt" entries are
+                                                 dropped with it, which is accepted
+                                                 because their loss stays boxed inside
+                                                 the workspace — admin/managed
+                                                 requirements still apply), and
+                                                 approvals kept away from an auto-
+                                                 reviewer. Non-interactive exec keeps
+                                                 approval_policy=never, so in practice
+                                                 an action needing escalation is
+                                                 denied, not prompted.
+                                                 Known limits: reads outside the
+                                                 workspace stay allowed (this bounds
+                                                 damage, not exposure); nothing is
+                                                 enforced on hosts reached over the
+                                                 network; and a NESTED codeagent-
+                                                 wrapper cannot start inside this tier
+                                                 — it creates its log under
+                                                 os.TempDir() before parsing, which
+                                                 the temp exclusions deny. That
+                                                 failure is loud, at startup.
                                UNSET IS NOT A SANDBOX, and neither is any other
                                value — those are ignored, and what runs instead is
                                decided by CODEX_REQUIRE_APPROVAL: left false (the
                                default) codex is launched with approvals and
                                sandboxing bypassed; set true, no sandbox flag is
                                passed at all and codex falls back to its own
-                               configuration. Read-only work must opt in explicitly.
+                               configuration. Sandboxed work must opt in explicitly.
     CLAUDE_REQUIRE_APPROVAL    Require approval for Claude backend (default: false)
     CODEX_DISABLE_SKIP_GIT_CHECK  Disable skip-git-repo-check flag (default: false)
     CODEAGENT_ASCII_MODE       Use ASCII symbols instead of Unicode (PASS/WARN/FAIL)

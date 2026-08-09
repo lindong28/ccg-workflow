@@ -817,9 +817,74 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 	// sandbox (writes/kills denied) for read-only work such as reviewers that never
 	// need FS-write. codex exec is non-interactive, so a denied write fails the
 	// command rather than prompting — no hang. Takes precedence over the bypass.
+	//
+	// CODEX_SANDBOX=workspace-write is the middle tier, added for delegates that must
+	// reach the network — remote diagnosis over ssh, most of all. read-only cannot do
+	// that work at all: its denial lands in connect(), before authentication, so ssh
+	// fails with "Operation not permitted" rather than anything auth-shaped. Without
+	// this tier the only option that can reach a remote host is the full bypass.
+	//
+	// Every `-c` below is pinned rather than inherited from config.toml on purpose:
+	// the tier must mean the same thing on every machine. Inherited, the delegate's
+	// actual write surface would be whatever the host operator happened to configure,
+	// while the tier name kept promising "the workspace".
+	//
+	//   network_access        the reason the tier exists. Omitted, a machine whose
+	//                         config lacks it reproduces the read-only failure mode
+	//                         under a tier that claims to allow network, and the
+	//                         caller misreads a config gap as a sandbox denial.
+	//   writable_roots=[]     clears operator-configured extra roots. `-c` overrides
+	//                         one leaf and leaves its siblings, so setting only
+	//                         network_access left an existing
+	//                         writable_roots=["/tmp","/var/log","~/.codex"] fully in
+	//                         force — measured, not hypothesised.
+	//   exclude_slash_tmp     /tmp and $TMPDIR are writable roots by DEFAULT under
+	//   exclude_tmpdir_env_var  workspace-write, with no config at all. Both measured
+	//                         writable before these were added, blocked after.
+	//
+	//   --ignore-rules        an `allow` rule in the operator's rules file lets a
+	//                         matching command run OUTSIDE the sandbox with no prompt.
+	//                         Leaving rules in force means the tier's guarantee is
+	//                         whatever those rules happen to say. (The flag lives on
+	//                         `codex exec`, not the top-level command — checking
+	//                         `codex --help` reports it absent.)
+	//                         Note it disables the whole user/project rules file, not
+	//                         only its `allow` entries: precedence is
+	//                         forbidden > prompt > allow, and protective `forbidden`
+	//                         entries go with it. (Scope stops there — admin/managed
+	//                         requirements are enforced elsewhere and still apply, so
+	//                         do not read this as "no rules at all".)
+	//                         That trade is deliberate and
+	//                         rests on the two harms not being alike — an `allow`
+	//                         escape is unbounded (the command leaves the sandbox
+	//                         entirely, voiding the tier), while an ignored `forbidden`
+	//                         still leaves the command boxed into the workspace. Buying
+	//                         a bounded harm with an unbounded one is the wrong way
+	//                         round, so rules lose.
+	//
+	// What this tier does and does not buy, stated plainly so callers do not overclaim:
+	//
+	//   - Writes are confined to the workspace. Note CODEX_HOME may resolve *inside*
+	//     the workspace (a symlinked ~/.codex does), in which case it is writable —
+	//     not as a special exemption but because it is workspace. Do not read a
+	//     successful write there as evidence of an implicit extra root; check where
+	//     the symlink points relative to the workdir first.
+	//   - Reads outside the workspace stay allowed. This bounds damage, not exposure.
+	//   - Nothing at all is enforced on hosts reached over the network — an OS sandbox
+	//     cannot follow an ssh connection. See openai/codex issue #32919, which reports
+	//     the same non-composition: a locally denied operation can still run through a
+	//     remote executor without a fresh approval.
 	switch {
 	case strings.EqualFold(strings.TrimSpace(os.Getenv("CODEX_SANDBOX")), "read-only"):
 		args = append(args, "--sandbox", "read-only")
+	case strings.EqualFold(strings.TrimSpace(os.Getenv("CODEX_SANDBOX")), "workspace-write"):
+		args = append(args, "--sandbox", "workspace-write",
+			"--ignore-rules",
+			"-c", "approvals_reviewer=user",
+			"-c", "sandbox_workspace_write.network_access=true",
+			"-c", "sandbox_workspace_write.writable_roots=[]",
+			"-c", "sandbox_workspace_write.exclude_slash_tmp=true",
+			"-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true")
 	case !envFlagEnabled("CODEX_REQUIRE_APPROVAL"):
 		args = append(args, "--dangerously-bypass-approvals-and-sandbox")
 	}
