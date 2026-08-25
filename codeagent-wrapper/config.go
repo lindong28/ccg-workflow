@@ -21,6 +21,8 @@ type Config struct {
 	SkipPermissions    bool
 	MaxParallelWorkers int
 	GeminiModel        string // Gemini model name (empty = use default)
+	CodexModel         string // Codex model slug (empty = inherit ~/.codex/config.toml)
+	CodexEffort        string // Codex reasoning effort (empty = inherit ~/.codex/config.toml)
 	Progress           bool   // Emit compact progress lines to stderr
 }
 
@@ -42,7 +44,15 @@ type TaskSpec struct {
 	Mode            string          `json:"-"`
 	UseStdin        bool            `json:"-"`
 	SkipPermissions bool            `json:"-"`
-	Context         context.Context `json:"-"`
+	// Codex per-call overrides. TaskSpec — not Config — is what the execution path
+	// actually carries: runCodexTaskWithContext rebuilds a fresh Config from this struct,
+	// so a field that lives only on the Config built in main() reaches the printed
+	// `Command:` line and nothing else. Tagged `json:"-"` because --parallel builds its
+	// TaskSpecs from stdin and deliberately does not support these (main.go refuses the
+	// env form there rather than honouring it silently).
+	CodexModel  string          `json:"-"`
+	CodexEffort string          `json:"-"`
+	Context     context.Context `json:"-"`
 }
 
 // TaskResult captures the execution outcome of a task
@@ -147,6 +157,21 @@ func parseParallelConfig(data []byte) (*ParallelConfig, error) {
 			value := strings.TrimSpace(kv[1])
 
 			switch key {
+			// Refused, not ignored. Unknown meta keys are dropped silently here, which was
+			// harmless while no one had a reason to write these two — the per-call model
+			// flags are what make `codex_model:` a natural thing to try. Dropping it would
+			// run the whole batch on the config default while the block says otherwise:
+			// the same invisible-at-the-call-site failure the flag and env paths already
+			// refuse. Named explicitly rather than by rejecting every unknown key, which
+			// would break blocks carrying fields this parser never claimed to read.
+			case "codex_model", "codex_effort":
+				return nil, fmt.Errorf(
+					"task block #%d (%q) sets %s, which --parallel does not support.\n"+
+						"  Per-call model and effort are single-call only: run that task on its own with\n"+
+						"  codeagent-wrapper --codex-model <slug> --codex-effort <level> - <workdir>\n"+
+						"  Left in place it would be ignored and the batch would run on the model from\n"+
+						"  ~/.codex/config.toml, with nothing in the output to show it.",
+					taskIndex, task.ID, key)
 			case "id":
 				task.ID = value
 			case "workdir":
@@ -203,13 +228,46 @@ func parseArgs() (*Config, error) {
 
 	// Read environment variable (lowest precedence)
 	geminiModel := strings.TrimSpace(os.Getenv("GEMINI_MODEL"))
+	codexModel := strings.TrimSpace(os.Getenv("CODEX_MODEL"))
+	codexEffort := strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT"))
 
 	backendName := defaultBackendName
 	skipPermissions := envFlagEnabled("CODEAGENT_SKIP_PERMISSIONS")
 	progress := false
+
+	// Two guards, both aimed at the same hazard: on the prompt-as-argument call form the
+	// task text *is* argv, and an unquoted prompt gets word-split by the caller's shell —
+	// so a prompt that merely discusses a flag arrives looking like one. Measured twice,
+	// both recorded under HARNESS-822 in the ai-agent-config ledger: a prompt containing
+	// `--once` overwrote the `-C` workdir, and a mistyped `--sandbox workspace-write` was
+	// absorbed as a positional workdir with the flag itself silently dropped.
+	//
+	//   endOfFlags    `--` stops flag parsing for *every* flag, not just the new ones.
+	//                 Protecting only --codex-* would be a half-measure: a prompt after
+	//                 `--` containing `--backend` would still be eaten. This regresses
+	//                 nobody — `--` is not recognised today, so any call passing it is
+	//                 already broken (it lands as the task).
+	//   sawPositional the two --codex-* flags are honoured only ahead of the first
+	//                 positional. Past it they are a hard error rather than a silent
+	//                 no-op: silently running on the default model while the caller
+	//                 believes they selected one is the failure this whole feature would
+	//                 otherwise introduce. Existing flags keep their scan-anywhere
+	//                 behaviour — narrowing them would break live callers.
+	endOfFlags := false
+	sawPositional := false
+
 	filtered := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if endOfFlags {
+			filtered = append(filtered, arg)
+			sawPositional = true
+			continue
+		}
+		if arg == "--" {
+			endOfFlags = true
+			continue
+		}
 		switch {
 		case arg == "--lite", arg == "-L":
 			liteMode = true
@@ -258,8 +316,61 @@ func parseArgs() (*Config, error) {
 		case strings.HasPrefix(arg, "--dangerously-skip-permissions="):
 			skipPermissions = parseBoolFlag(strings.TrimPrefix(arg, "--dangerously-skip-permissions="), skipPermissions)
 			continue
+		case arg == "--codex-model", strings.HasPrefix(arg, "--codex-model="),
+			arg == "--codex-effort", strings.HasPrefix(arg, "--codex-effort="):
+			name := "--codex-model"
+			if strings.HasPrefix(arg, "--codex-effort") {
+				name = "--codex-effort"
+			}
+			if sawPositional {
+				// Short lines, action first. This message renders inside the deferred
+				// "Recent Errors" block, i.e. already several lines down and after
+				// unrelated startup warnings — a single long paragraph there is
+				// effectively unreadable. Say what to type before explaining why.
+				// "first positional", not "the task": `resume` is itself a positional, so
+				// `resume <sid> --codex-model X <task>` lands here even though the flag IS
+				// before the task. An earlier wording said "move it before the task" and
+				// left that caller with no way to act on the message — it was already there.
+				return nil, fmt.Errorf(
+					"%[1]s was found after the first positional argument; it must come before all of them.\n"+
+						"  New session:  codeagent-wrapper %[1]s <value> \"<task>\" [workdir]\n"+
+						"  Resume:       codeagent-wrapper %[1]s <value> resume <session-id> \"<task>\" [workdir]\n"+
+						"                (`resume` is itself a positional, so the flag goes before it too)\n"+
+						"  Is this text part of your prompt? Pass the prompt on stdin with `-`.\n"+
+						"  This is an error, not a warning: honouring it after the task would change which "+
+						"token is the task, and ignoring it would run on the default model with no sign that it did.",
+					name)
+			}
+			var value string
+			if eq := strings.IndexByte(arg, '='); eq >= 0 {
+				value = strings.TrimSpace(arg[eq+1:])
+			} else {
+				if i+1 >= len(args) {
+					return nil, fmt.Errorf("%s flag requires a non-empty value", name)
+				}
+				value = strings.TrimSpace(args[i+1])
+				i++
+			}
+			if value == "" {
+				return nil, fmt.Errorf("%s flag requires a non-empty value", name)
+			}
+			// Trimmed, then passed through unvalidated. No allowlist, because the two
+			// obtainable lists of valid efforts do not contain each other: codex's own
+			// rejection names none/minimal/low/medium/high/xhigh/max (no `ultra`), while
+			// models_cache.json unions to low/medium/high/xhigh/max/ultra (no none or
+			// minimal) and varies per model — luna has five, sol and terra six. Any static
+			// table would refuse valid values AND advertise inapplicable ones, and would
+			// rot with every model generation. codex rejects a bad value with a loud 400
+			// and enumerates what it accepts, which is a better error than we could write.
+			if name == "--codex-model" {
+				codexModel = value
+			} else {
+				codexEffort = value
+			}
+			continue
 		}
 		filtered = append(filtered, arg)
+		sawPositional = true
 	}
 
 	if len(filtered) == 0 {
@@ -267,7 +378,7 @@ func parseArgs() (*Config, error) {
 	}
 	args = filtered
 
-	cfg := &Config{WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions, GeminiModel: geminiModel, Progress: progress}
+	cfg := &Config{WorkDir: defaultWorkdir, Backend: backendName, SkipPermissions: skipPermissions, GeminiModel: geminiModel, CodexModel: codexModel, CodexEffort: codexEffort, Progress: progress}
 	cfg.MaxParallelWorkers = resolveMaxParallelWorkers()
 
 	if args[0] == "resume" {

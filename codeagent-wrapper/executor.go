@@ -894,6 +894,25 @@ func buildCodexArgs(cfg *Config, targetArg string) []string {
 		args = append(args, "--skip-git-repo-check")
 	}
 
+	// Per-call model / reasoning effort. Emitted ahead of the resume early-return on
+	// purpose: both are honoured on `codex exec resume`, measured on a real session —
+	// seeded gpt-5.6-luna/low, resumed with gpt-5.6-sol/high, and the rollout's two
+	// turn_context records carry luna/low then sol/high under one session id.
+	//
+	// Effort has to travel as `-c` because `codex exec` has no --effort flag. `-c`
+	// overrides a single leaf and leaves its siblings alone (the workspace-write block
+	// above documents the same behaviour), so naming only one of the pair leaves the
+	// other inherited from ~/.codex/config.toml rather than reset to a built-in default.
+	//
+	// Both empty is the untouched path: no argv is appended and the emitted command is
+	// byte-identical to what it was before this feature existed.
+	if model := strings.TrimSpace(cfg.CodexModel); model != "" {
+		args = append(args, "-m", model)
+	}
+	if effort := strings.TrimSpace(cfg.CodexEffort); effort != "" {
+		args = append(args, "-c", "model_reasoning_effort=\""+effort+"\"")
+	}
+
 	if isResume {
 		// -C applies to resume exactly as it does to a new session: it is an
 		// option of `codex exec`, parsed before the `resume` subcommand, and it
@@ -953,6 +972,8 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 		Backend:         defaultBackendName,
 		Progress:        taskSpec.Progress,
 		SkipPermissions: taskSpec.SkipPermissions,
+		CodexModel:      taskSpec.CodexModel,
+		CodexEffort:     taskSpec.CodexEffort,
 	}
 
 	commandName := codexCommand

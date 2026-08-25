@@ -14,7 +14,12 @@ import (
 )
 
 const (
-	version                  = "5.9.2"
+	// Build metadata (`+…`) rather than a bumped number: upstream's own releases already
+	// occupy 5.10.0 and 5.11.0, so a plain bump would make `--version` unable to tell a
+	// fork build from an upstream one — which is the single check the consuming repo
+	// relies on to detect a missed vendor. Kept in lockstep with EXPECTED_BINARY_VERSION
+	// in src/utils/installer.ts; version.test.ts asserts the two are equal.
+	version                  = "5.9.2+codex-model.1"
 	defaultWorkdir           = "."
 	defaultTimeout           = 21600 // seconds (6 hours)
 	defaultInactivityTimeout = 1800  // seconds (30 minutes)
@@ -66,6 +71,88 @@ var globalWebServer *WebServer
 
 func init() {
 	forceKillDelay.Store(5) // seconds - default value
+}
+
+// findParallelIndex locates `--parallel` in raw argv, stopping at a `--` terminator.
+//
+// This is a second parser: it runs before parseArgs and parseArgs never sees these
+// args, so the terminator has to be honoured in both places or in neither. Implemented
+// only in parseArgs, `codeagent-wrapper -- --parallel` would be task text to one parser
+// and a mode switch to the other — exactly the ambiguity `--` exists to remove.
+//
+// Extracted so its test can drive this function rather than a copy of it: a test that
+// re-implements the scan passes whenever the copy is self-consistent, including when
+// the real one is wrong.
+func findParallelIndex(args []string) int {
+	for i, arg := range args {
+		if arg == "--" {
+			return -1
+		}
+		if arg == "--parallel" {
+			return i
+		}
+	}
+	return -1
+}
+
+// parallelFlags is what the parallel branch reads out of argv.
+type parallelFlags struct {
+	backendName     string
+	fullOutput      bool
+	geminiModelSeen bool
+	extras          []string
+}
+
+// parseParallelFlags is the third argv parser in this file, after findParallelIndex and
+// parseArgs. `--` has to mean the same thing in all three or it means nothing: without it
+// here, `codeagent-wrapper --parallel -- --backend codex` counts the terminator itself as
+// a stray argument and dies naming the wrong token, while help promises `--` ends flag
+// parsing everywhere.
+//
+// Tokens after `--` deliberately stay extras: parallel takes its tasks from stdin and
+// accepts no positionals, so the extras error is the right outcome — what must not happen
+// is the terminator becoming one of them.
+//
+// Extracted for the same reason as findParallelIndex: a test that re-implements this loop
+// passes whenever its copy is self-consistent, including when the real one is wrong.
+func parseParallelFlags(args []string) (parallelFlags, error) {
+	out := parallelFlags{backendName: defaultBackendName}
+	endOfFlags := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if !endOfFlags && arg == "--" {
+			endOfFlags = true
+			continue
+		}
+		if endOfFlags {
+			out.extras = append(out.extras, arg)
+			continue
+		}
+		switch {
+		case arg == "--parallel":
+			continue
+		case arg == "--full-output":
+			out.fullOutput = true
+		case arg == "--backend":
+			if i+1 >= len(args) {
+				return out, fmt.Errorf("--backend flag requires a value")
+			}
+			out.backendName = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--backend="):
+			value := strings.TrimPrefix(arg, "--backend=")
+			if value == "" {
+				return out, fmt.Errorf("--backend flag requires a value")
+			}
+			out.backendName = value
+		case arg == "--gemini-model" || strings.HasPrefix(arg, "--gemini-model="):
+			out.geminiModelSeen = true
+			continue
+		default:
+			out.extras = append(out.extras, arg)
+		}
+	}
+	return out, nil
 }
 
 func isWindows() bool {
@@ -192,50 +279,18 @@ func run() (exitCode int) {
 	// Handle remaining commands
 	if len(os.Args) > 1 {
 		args := os.Args[1:]
-		parallelIndex := -1
-		for i, arg := range args {
-			if arg == "--parallel" {
-				parallelIndex = i
-				break
-			}
-		}
+		parallelIndex := findParallelIndex(args)
 
 		if parallelIndex != -1 {
-			backendName := defaultBackendName
-			fullOutput := false
-			var extras []string
-
-			// Check for gemini-model in parallel mode
-			geminiModelInParallel := false
-
-			for i := 0; i < len(args); i++ {
-				arg := args[i]
-				switch {
-				case arg == "--parallel":
-					continue
-				case arg == "--full-output":
-					fullOutput = true
-				case arg == "--backend":
-					if i+1 >= len(args) {
-						fmt.Fprintln(os.Stderr, "ERROR: --backend flag requires a value")
-						return 1
-					}
-					backendName = args[i+1]
-					i++
-				case strings.HasPrefix(arg, "--backend="):
-					value := strings.TrimPrefix(arg, "--backend=")
-					if value == "" {
-						fmt.Fprintln(os.Stderr, "ERROR: --backend flag requires a value")
-						return 1
-					}
-					backendName = value
-				case arg == "--gemini-model" || strings.HasPrefix(arg, "--gemini-model="):
-					geminiModelInParallel = true
-					continue
-				default:
-					extras = append(extras, arg)
-				}
+			flags, err := parseParallelFlags(args)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+				return 1
 			}
+			backendName := flags.backendName
+			fullOutput := flags.fullOutput
+			extras := flags.extras
+			geminiModelInParallel := flags.geminiModelSeen
 
 			// Warn about unsupported parameter
 			if geminiModelInParallel {
@@ -288,6 +343,31 @@ func run() (exitCode int) {
 					logWarn(fmt.Sprintf("Failed to inject ROLE_FILE for task %s: %v", cfg.Tasks[i].ID, err))
 				} else {
 					cfg.Tasks[i].Task = injectedTask
+				}
+			}
+
+			// CODEX_MODEL / CODEX_REASONING_EFFORT are single-call only: parallel builds
+			// its tasks from stdin and never constructs the Config that carries them, so
+			// leaving them unguarded would run the whole batch on the default model while
+			// the caller believes otherwise — invisible at the call site, which is the one
+			// outcome this feature must not produce.
+			//
+			// Refuse only when codex is actually in the batch. An unconditional check
+			// would fail a pure gemini/claude run over variables that could not have
+			// affected it, contradicting this feature's scope. Backends are resolved
+			// above, so by here every task's backend is its final value.
+			if envModel, envEffort := strings.TrimSpace(os.Getenv("CODEX_MODEL")), strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT")); envModel != "" || envEffort != "" {
+				codexInvolved := false
+				for i := range cfg.Tasks {
+					if strings.EqualFold(strings.TrimSpace(cfg.Tasks[i].Backend), "codex") {
+						codexInvolved = true
+						break
+					}
+				}
+				if codexInvolved {
+					fmt.Fprintln(os.Stderr, "ERROR: CODEX_MODEL / CODEX_REASONING_EFFORT are not honoured in --parallel mode, and at least one task in this batch uses the codex backend.")
+					fmt.Fprintln(os.Stderr, "The batch would silently run on the model from ~/.codex/config.toml instead. Unset them, or run the codex tasks separately.")
+					return 1
 				}
 			}
 
@@ -383,6 +463,21 @@ func run() (exitCode int) {
 	// Warn if model parameter used with non-gemini backend
 	if cfg.GeminiModel != "" && cfg.Backend != "gemini" {
 		logWarn("--gemini-model parameter is only effective with --backend gemini")
+	}
+
+	if cfg.Backend == "codex" {
+		if cfg.CodexModel != "" {
+			logInfo(fmt.Sprintf("Using Codex model: %s", cfg.CodexModel))
+		}
+		if cfg.CodexEffort != "" {
+			logInfo(fmt.Sprintf("Using Codex reasoning effort: %s", cfg.CodexEffort))
+		}
+	} else if cfg.CodexModel != "" || cfg.CodexEffort != "" {
+		// A warning, not an error: unlike the parallel case these can also arrive from
+		// the environment, where they are set once and inherited by every later call —
+		// so refusing here would break unrelated gemini/claude runs in a shell that has
+		// them exported. The run itself is unaffected; only the request is inert.
+		logWarn(fmt.Sprintf("--codex-model / --codex-effort are only effective with --backend codex (this run uses %s); ignoring them", cfg.Backend))
 	}
 
 	timeoutSec := resolveTimeout()
@@ -490,6 +585,8 @@ func run() (exitCode int) {
 		UseStdin:        useStdin,
 		Progress:        cfg.Progress,
 		SkipPermissions: cfg.SkipPermissions,
+		CodexModel:      cfg.CodexModel,
+		CodexEffort:     cfg.CodexEffort,
 	}
 
 	result := runTaskFn(taskSpec, false, cfg.Timeout)
@@ -597,7 +694,26 @@ Options:
                           Can also be set via GEMINI_MODEL environment variable
                           CLI parameter takes precedence over environment variable
                           Examples: gemini-2.5-flash, gemini-1.5-pro
+    --codex-model <slug>  Specify Codex model (codex backend only)
+                          MUST come before every positional argument, 'resume' included
+                          Can also be set via CODEX_MODEL environment variable
+                          CLI parameter takes precedence over environment variable
+                          Omitted, the model from ~/.codex/config.toml is used
+                          Examples: gpt-5.6-sol, gpt-5.6-luna, gpt-5.6-terra
+    --codex-effort <level>
+                          Specify Codex reasoning effort (codex backend only)
+                          MUST come before every positional argument, 'resume' included
+                          Can also be set via CODEX_REASONING_EFFORT
+                          CLI parameter takes precedence over environment variable
+                          Omitted, the effort from ~/.codex/config.toml is used
+                          Levels vary per model and are not validated here; codex
+                          rejects a bad one and names the ones it accepts
     --progress            Emit compact progress lines to stderr during execution
+    --                    End of flags: every later argument is positional.
+                          It protects a task that is ONE quoted argument. It cannot
+                          reassemble a prompt the shell already split into several
+                          words — those extra words still land on workdir. For any
+                          multi-word prompt, pass it on stdin with '-' instead
 
 Environment Variables:
     CODEX_TIMEOUT              Timeout in milliseconds (default: 21600000)
