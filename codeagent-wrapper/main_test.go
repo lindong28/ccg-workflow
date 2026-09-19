@@ -255,8 +255,8 @@ func (d *drainBlockingCmd) SetDir(dir string) {
 	d.inner.SetDir(dir)
 }
 
-func (d *drainBlockingCmd) SetEnv(env map[string]string) {
-	d.inner.SetEnv(env)
+func (d *drainBlockingCmd) SetEnv(env map[string]string, unset ...string) {
+	d.inner.SetEnv(env, unset...)
 }
 
 func (d *drainBlockingCmd) Process() processHandle {
@@ -517,8 +517,8 @@ func (f *fakeCmd) SetStderr(w io.Writer) {
 
 func (f *fakeCmd) SetDir(string) {}
 
-func (f *fakeCmd) SetEnv(env map[string]string) {
-	if len(env) == 0 {
+func (f *fakeCmd) SetEnv(env map[string]string, unset ...string) {
+	if len(env) == 0 && len(unset) == 0 {
 		return
 	}
 	f.mu.Lock()
@@ -528,6 +528,9 @@ func (f *fakeCmd) SetEnv(env map[string]string) {
 	}
 	for k, v := range env {
 		f.env[k] = v
+	}
+	for _, k := range unset {
+		delete(f.env, k)
 	}
 }
 
@@ -1617,7 +1620,7 @@ func TestBackendBuildArgs_ClaudeBackend(t *testing.T) {
 	backend := ClaudeBackend{}
 	cfg := &Config{Mode: "new", WorkDir: defaultWorkdir}
 	got := backend.BuildArgs(cfg, "todo")
-	want := []string{"-p", "--dangerously-skip-permissions", "--setting-sources", "", "--output-format", "stream-json", "--verbose", "todo"}
+	want := []string{"-p", "--output-format", "stream-json", "--verbose", "todo"}
 	if len(got) != len(want) {
 		t.Fatalf("args length=%d, want %d: %v", len(got), len(want), got)
 	}
@@ -1640,7 +1643,7 @@ func TestClaudeBackendBuildArgs_OutputValidation(t *testing.T) {
 	target := "ensure-flags"
 
 	args := backend.BuildArgs(cfg, target)
-	want := []string{"-p", "--dangerously-skip-permissions", "--setting-sources", "", "--output-format", "stream-json", "--verbose", target}
+	want := []string{"-p", "--output-format", "stream-json", "--verbose", target}
 	if len(args) != len(want) {
 		t.Fatalf("args length=%d, want %d: %v", len(args), len(want), args)
 	}
@@ -3148,7 +3151,7 @@ func TestVersionFlag(t *testing.T) {
 		}
 	})
 
-	want := "codeagent-wrapper version 5.9.2+codex-model.1\n"
+	want := "codeagent-wrapper version " + version + "\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3164,7 +3167,7 @@ func TestVersionShortFlag(t *testing.T) {
 		}
 	})
 
-	want := "codeagent-wrapper version 5.9.2+codex-model.1\n"
+	want := "codeagent-wrapper version " + version + "\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)
@@ -3180,7 +3183,7 @@ func TestVersionLegacyAlias(t *testing.T) {
 		}
 	})
 
-	want := "codex-wrapper version 5.9.2+codex-model.1\n"
+	want := "codex-wrapper version " + version + "\n"
 
 	if output != want {
 		t.Fatalf("output = %q, want %q", output, want)

@@ -110,13 +110,9 @@ func buildClaudeArgs(cfg *Config, targetArg string) []string {
 		return nil
 	}
 	args := []string{"-p"}
-	if cfg.SkipPermissions || !envFlagEnabled("CLAUDE_REQUIRE_APPROVAL") {
+	if cfg.SkipPermissions {
 		args = append(args, "--dangerously-skip-permissions")
 	}
-
-	// Prevent infinite recursion: disable all setting sources (user, project, local)
-	// This ensures a clean execution environment without CLAUDE.md or skills that would trigger codeagent
-	args = append(args, "--setting-sources", "")
 
 	if cfg.Mode == "resume" {
 		if cfg.SessionID != "" {

@@ -49,8 +49,8 @@ func TestSkipPermissionsThreadedToExecArgs(t *testing.T) {
 	}
 
 	t.Setenv("CLAUDE_REQUIRE_APPROVAL", "")
-	if withoutSkip := run(false); !hasFlag(withoutSkip) {
-		t.Fatalf("CLAUDE_REQUIRE_APPROVAL unset must default --dangerously-skip-permissions into exec args, got %v", withoutSkip)
+	if withoutSkip := run(false); hasFlag(withoutSkip) {
+		t.Fatalf("default Claude execution must not bypass permissions, got %v", withoutSkip)
 	}
 
 	t.Setenv("CLAUDE_REQUIRE_APPROVAL", "true")

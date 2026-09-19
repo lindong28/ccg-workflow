@@ -19,7 +19,7 @@ const (
 	// fork build from an upstream one — which is the single check the consuming repo
 	// relies on to detect a missed vendor. Kept in lockstep with EXPECTED_BINARY_VERSION
 	// in src/utils/installer.ts; version.test.ts asserts the two are equal.
-	version                  = "5.9.2+codex-model.1"
+	version                  = "5.9.2+claude-worker.1"
 	defaultWorkdir           = "."
 	defaultTimeout           = 21600 // seconds (6 hours)
 	defaultInactivityTimeout = 1800  // seconds (30 minutes)
@@ -768,7 +768,9 @@ Environment Variables:
                                sandboxing bypassed; set true, no sandbox flag is
                                passed at all and codex falls back to its own
                                configuration. Sandboxed work must opt in explicitly.
-    CLAUDE_REQUIRE_APPROVAL    Require approval for Claude backend (default: false)
+    CLAUDE_REQUIRE_APPROVAL    Legacy variable, no effect: Claude preserves normal
+                               permissions unless --skip-permissions or
+                               CODEAGENT_SKIP_PERMISSIONS explicitly requests bypass
     CODEX_DISABLE_SKIP_GIT_CHECK  Disable skip-git-repo-check flag (default: false)
     CODEAGENT_ASCII_MODE       Use ASCII symbols instead of Unicode (PASS/WARN/FAIL)
     CODEAGENT_LITE_MODE        Enable lite mode (true/false)

@@ -58,7 +58,7 @@ type commandRunner interface {
 	StdinPipe() (io.WriteCloser, error)
 	SetStderr(io.Writer)
 	SetDir(string)
-	SetEnv(env map[string]string)
+	SetEnv(env map[string]string, unset ...string)
 	Process() processHandle
 }
 
@@ -114,8 +114,8 @@ func (r *realCmd) SetDir(dir string) {
 	}
 }
 
-func (r *realCmd) SetEnv(env map[string]string) {
-	if r == nil || r.cmd == nil || len(env) == 0 {
+func (r *realCmd) SetEnv(env map[string]string, unset ...string) {
+	if r == nil || r.cmd == nil || (len(env) == 0 && len(unset) == 0) {
 		return
 	}
 
@@ -145,6 +145,9 @@ func (r *realCmd) SetEnv(env map[string]string) {
 			continue
 		}
 		merged[k] = v
+	}
+	for _, k := range unset {
+		delete(merged, k)
 	}
 
 	keys := make([]string, 0, len(merged))
@@ -1131,7 +1134,14 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 	if env == nil {
 		env = make(map[string]string)
 	}
-	cmd.SetEnv(env) // SetEnv 会自动合并 os.Environ() (executor.go:122-161)
+	if cfg.Backend == "claude" {
+		// A separate Claude process must establish its own session identity.
+		// Remove parent markers after every env source is merged, retaining
+		// CODEAGENT_CALLER_HARNESS / CODEAGENT_ROOT_SESSION_ID for routing.
+		cmd.SetEnv(env, "CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEAGENT_PURPOSE")
+	} else {
+		cmd.SetEnv(env, "CODEAGENT_PURPOSE")
+	}
 
 	// Set working directory for backends that rely on cwd.
 	// - Codex: uses -C in both new and resume modes; skip cmd.Dir.

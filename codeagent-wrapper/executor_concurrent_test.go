@@ -130,8 +130,8 @@ func (f *execFakeRunner) StdinPipe() (io.WriteCloser, error) {
 }
 func (f *execFakeRunner) SetStderr(io.Writer) {}
 func (f *execFakeRunner) SetDir(dir string)   { f.dir = dir }
-func (f *execFakeRunner) SetEnv(env map[string]string) {
-	if len(env) == 0 {
+func (f *execFakeRunner) SetEnv(env map[string]string, unset ...string) {
+	if len(env) == 0 && len(unset) == 0 {
 		return
 	}
 	if f.env == nil {
@@ -139,6 +139,9 @@ func (f *execFakeRunner) SetEnv(env map[string]string) {
 	}
 	for k, v := range env {
 		f.env[k] = v
+	}
+	for _, k := range unset {
+		delete(f.env, k)
 	}
 }
 func (f *execFakeRunner) Process() processHandle {

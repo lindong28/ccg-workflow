@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 修复
 
+- **Claude 独立 worker 恢复正常配置与权限行为**（wrapper `5.9.2+claude-worker.1`，2026-09-20）：不再禁用 settings 来源，也不再默认跳过权限；仅显式传入权限跳过参数时启用。子进程清理父 Claude 的嵌套与 session 标记，保留 root session lineage 供派工路由使用，并清除不应传给后续 worker 的出图用途标记。本条记录 wrapper 源码变更，不是 npm 发布。
 - **`resume` 不再丢弃工作目录**（wrapper 5.9.2）：`resume <session_id> "task" [workdir]` 一直接受并**静默忽略** `[workdir]`——resume 分支不传 `-C`，而 `cmd.Dir` 的 codex 分支又刻意留空，依据是两处注释写的「session-id carries it on resume」。session id 选的是会话、不是工作根；两者都不给时 agent 只能继承调用方进程当时的 cwd。它从不报错：prompt 里路径写全的步骤照常成功，只有让 agent 自己找文件、自己产出 diff 的步骤会静默作用在另一棵树上——git worktree 隔离下即"独立 reviewer 审了另一个 checkout，并给出形态正确的结论"。现在 resume 与 new 模式一样传 `-C`（`WorkDir` 为空时不传，因为 `"."` 兜底在上层，`-C ""` 比不传更糟）
 - **`CODEX_SANDBOX` 补进 `--help`**：它是有测试守护的刻意特性、只读委派整条链都依赖它，却完全没出现在 Environment Variables 段，于是"统一入口默认带某种沙箱"这个错误预期无从纠正——默认其实是无沙箱。文案写全三种结果而非两种：非 `read-only` 值叠加 `CODEX_REQUIRE_APPROVAL=true` 时两个分支都不触发，一个 sandbox 参数都不加
 - **Ubuntu backend discovery**：Ubuntu 非交互 SSH 会话的默认 `PATH` 不含用户本地 CLI 目录时，`codeagent-wrapper` 现在也能使用安装在 `~/.local/bin` 下的 Codex、Claude 或 Gemini
