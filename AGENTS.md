@@ -1,6 +1,6 @@
 # skills-v2 (CCG Multi-Model Collaboration System)
 
-> [根目录](../CLAUDE.md) > **skills-v2**
+> [根目录](./AGENTS.md) > **skills-v2**
 
 **Last Updated**: 2026-03-31 (v2.1.11)
 
@@ -480,7 +480,7 @@ graph TD
 - 更新使用说明（如有新功能）
 - 更新底部版本号
 
-### 4. 更新 CLAUDE.md
+### 4. 更新 AGENTS.md
 - 更新顶部 `Last Updated` 日期和版本号
 - 添加变更记录条目
 - 更新命令数量、接口表等受影响的章节
@@ -510,7 +510,7 @@ git push origin main
 - [ ] package.json 版本号已更新
 - [ ] CHANGELOG.md 已添加新版本条目
 - [ ] README.md 已更新（命令表 + 使用说明 + 底部版本号）
-- [ ] CLAUDE.md 已更新（Last Updated + 变更记录 + 受影响章节）
+- [ ] AGENTS.md 已更新（Last Updated + 变更记录 + 受影响章节）
 - [ ] **⚠ 若修改了 `codeagent-wrapper/` 下的 Go 代码，必须同步 bump 两处版本号：**
   - [ ] `codeagent-wrapper/main.go` → `version = "x.y.z"`
   - [ ] `src/utils/installer.ts` → `EXPECTED_BINARY_VERSION = 'x.y.z'`

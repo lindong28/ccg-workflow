@@ -19,7 +19,7 @@
 
 | 文档 | 何时读取 | 何时更新 |
 | --- | --- | --- |
-| [`CLAUDE.md`](./CLAUDE.md) | 开始写、改或审 `docs/` 下的内容前 | `docs/` 文档集合或读取/更新触发条件变化时 |
+| [`AGENTS.md`](./AGENTS.md) | 开始写、改或审 `docs/` 下的内容前 | `docs/` 文档集合或读取/更新触发条件变化时 |
 | [codeagent-wrapper Ubuntu 源码构建与跨平台交付计划](./plans/20260729-codeagent-wrapper-ubuntu/plan.md) | 追溯 Ubuntu 支持的目标、边界、验收与设计意图 | 归档后保持不变；后续变化由新的 plan 或当前态用户文档承载 |
 | [`.vitepress/config.mts`](./.vitepress/config.mts) | 修改文档站导航、语言或主题配置前 | 文档站结构或展示配置变化时 |
 | [`public/logo.svg`](./public/logo.svg) | 修改文档站标识资源前 | 文档站引用的标识资源变化时 |
