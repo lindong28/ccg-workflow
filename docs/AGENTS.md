@@ -1,6 +1,6 @@
 # 项目文档索引
 
-> 在 `docs/` 下工作时遵循 `~/.claude/references/docs-organization-protocol.md`。根目录 `README.md`、`README.zh-CN.md` 与 `CHANGELOG.md` 也属于该协议的用户文档范围。
+> 在 `docs/` 下工作时遵循 `~/.claude/skills/documentation-workflows/references/docs-organization-protocol.md`。根目录 `README.md`、`README.zh-CN.md` 与 `CHANGELOG.md` 也属于该协议的用户文档范围。
 
 ## 用户文档
 
