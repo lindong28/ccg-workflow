@@ -34,22 +34,23 @@ type ParallelConfig struct {
 
 // TaskSpec describes an individual task entry in the parallel config
 type TaskSpec struct {
-	ID              string          `json:"id"`
-	Task            string          `json:"task"`
-	WorkDir         string          `json:"workdir,omitempty"`
-	Dependencies    []string        `json:"dependencies,omitempty"`
-	SessionID       string          `json:"session_id,omitempty"`
-	Backend         string          `json:"backend,omitempty"`
-	Progress        bool            `json:"-"`
-	Mode            string          `json:"-"`
-	UseStdin        bool            `json:"-"`
-	SkipPermissions bool            `json:"-"`
+	ID              string   `json:"id"`
+	Task            string   `json:"task"`
+	WorkDir         string   `json:"workdir,omitempty"`
+	Dependencies    []string `json:"dependencies,omitempty"`
+	SessionID       string   `json:"session_id,omitempty"`
+	Backend         string   `json:"backend,omitempty"`
+	Progress        bool     `json:"-"`
+	Mode            string   `json:"-"`
+	UseStdin        bool     `json:"-"`
+	SkipPermissions bool     `json:"-"`
 	// Codex per-call overrides. TaskSpec — not Config — is what the execution path
 	// actually carries: runCodexTaskWithContext rebuilds a fresh Config from this struct,
 	// so a field that lives only on the Config built in main() reaches the printed
 	// `Command:` line and nothing else. Tagged `json:"-"` because --parallel builds its
 	// TaskSpecs from stdin and deliberately does not support these (main.go refuses the
 	// env form there rather than honouring it silently).
+	GeminiModel string          `json:"-"`
 	CodexModel  string          `json:"-"`
 	CodexEffort string          `json:"-"`
 	Context     context.Context `json:"-"`
@@ -368,6 +369,9 @@ func parseArgs() (*Config, error) {
 				codexEffort = value
 			}
 			continue
+		}
+		if strings.HasPrefix(arg, "-") && arg != "-" {
+			return nil, fmt.Errorf("unknown option %q; use -- before a literal task beginning with a dash, or pass the task on stdin with -", arg)
 		}
 		filtered = append(filtered, arg)
 		sawPositional = true

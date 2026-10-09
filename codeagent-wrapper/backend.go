@@ -158,10 +158,8 @@ func buildGeminiArgs(cfg *Config, targetArg string) []string {
 		}
 	}
 
-	// Gemini CLI loads .env from CWD and walks up to .git root / $HOME.
-	// To avoid project-level .env overriding global API keys, we set cmd.Dir=$HOME
-	// in executor.go and pass the project directory via --include-directories instead.
-	// See: https://github.com/google-gemini/gemini-cli/issues/2493
+	// executor.go sets cmd.Dir to cfg.WorkDir for both new and resume.
+	// New sessions additionally receive --include-directories below.
 	if cfg.Mode != "resume" && cfg.WorkDir != "" {
 		args = append(args, "--include-directories", cfg.WorkDir)
 	}

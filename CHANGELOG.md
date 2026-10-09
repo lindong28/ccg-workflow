@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Wrapper 输入与安装边界**（`5.9.2+claude-worker.2`，源码修复，未发布或安装）：位置任务不再读取 stdin；显式 `-` 仍从 stdin 读取。拒绝未知选项和不存在／非目录的工作目录；Gemini 模型选项传入实际执行路径。近期错误摘要只列 ERROR，WARN 仍留日志。临时日志路径比较统一解析两侧别名，不改回收范围。fork 安装器保留外部脚本和链接，明确提示未执行、未验证，不建议强制覆盖。
+
 ### 🐛 修复
 
 - **Claude 独立 worker 恢复正常配置与权限行为**（wrapper `5.9.2+claude-worker.1`，2026-09-20）：不再禁用 settings 来源，也不再默认跳过权限；仅显式传入权限跳过参数时启用。子进程清理父 Claude 的嵌套与 session 标记，保留 root session lineage 供派工路由使用，并清除不应传给后续 worker 的出图用途标记。本条记录 wrapper 源码变更，不是 npm 发布。

@@ -95,6 +95,8 @@ export interface InstallResult {
   configPath: string
   binPath?: string
   binInstalled?: boolean
+  /** Preserved external script or symlink; not executed or verified by this install. */
+  binPreservedPath?: string
 }
 
 // ace-tool 配置

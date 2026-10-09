@@ -666,7 +666,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
     })
 
     // Install selected MCP tools (multiple can be installed)
-    spinner.succeed(ansis.green(i18n.t('init:installSuccess')))
+    if (result.binPreservedPath)
+      spinner.warn('安装未全部完成：已保留外部管理的 wrapper，可用性未验证 / Wrapper preserved; availability unverified')
+    else
+      spinner.succeed(ansis.green(i18n.t('init:installSuccess')))
 
     // ace-tool
     if (aceToolToken) {
@@ -882,7 +885,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
       result.errors.forEach((error) => {
         console.log(`    ${ansis.red('✗')} ${error}`)
       })
-      if (!result.success) {
+      if (!result.success && !result.binPreservedPath) {
         console.log()
         console.log(ansis.yellow(`  尝试修复 / Try to fix:`))
         console.log(ansis.cyan(`    npx ccg-workflow@latest init --force`))
@@ -892,7 +895,13 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
 
     // Show binary installation result
-    if (result.binInstalled && result.binPath) {
+    if (result.binPreservedPath) {
+      console.log()
+      console.log(ansis.yellow(`  已保留外部管理入口 / Externally managed wrapper preserved: ${result.binPreservedPath}`))
+      console.log(ansis.yellow('  未执行、未验证可用性；请通过所属 harness 检查或更新，不要用下载文件覆盖。'))
+      console.log(ansis.gray('  Not executed or verified; check or update through its owning harness, without replacing it with a download.'))
+    }
+    else if (result.binInstalled && result.binPath) {
       console.log()
       console.log(ansis.cyan(`  ${i18n.t('init:installedBinary')}`))
       console.log(`    ${ansis.green('✓')} codeagent-wrapper ${ansis.gray(`→ ${result.binPath}`)}`)

@@ -975,6 +975,7 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 		Backend:         defaultBackendName,
 		Progress:        taskSpec.Progress,
 		SkipPermissions: taskSpec.SkipPermissions,
+		GeminiModel:     taskSpec.GeminiModel,
 		CodexModel:      taskSpec.CodexModel,
 		CodexEffort:     taskSpec.CodexEffort,
 	}
@@ -996,6 +997,12 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 	}
 	if cfg.WorkDir == "" {
 		cfg.WorkDir = defaultWorkdir
+	}
+
+	if err := validateWorkDir(cfg.WorkDir); err != nil {
+		result.ExitCode = 1
+		result.Error = err.Error()
+		return result
 	}
 
 	if cfg.Mode == "resume" && strings.TrimSpace(cfg.SessionID) == "" {

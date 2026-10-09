@@ -31,13 +31,13 @@ type Logger struct {
 	pendingWG    sync.WaitGroup
 	flushMu      sync.Mutex
 	workerErr    error
-	errorEntries []string // Cache of recent ERROR/WARN entries
+	errorEntries []string // Cache of recent ERROR entries; warnings remain in the log
 	errorMu      sync.Mutex
 }
 
 type logEntry struct {
 	msg     string
-	isError bool // true for ERROR or WARN levels
+	isError bool // true for ERROR level
 }
 
 // CleanupStats captures the outcome of a cleanupOldLogs run.
@@ -264,7 +264,7 @@ func (l *Logger) RemoveLogFile() error {
 	return os.Remove(l.path)
 }
 
-// ExtractRecentErrors returns the most recent ERROR and WARN entries from memory cache.
+// ExtractRecentErrors returns the most recent ERROR entries from memory cache.
 // Returns up to maxEntries entries in chronological order.
 func (l *Logger) ExtractRecentErrors(maxEntries int) []string {
 	if l == nil || maxEntries <= 0 {
@@ -343,7 +343,7 @@ func (l *Logger) log(level, msg string) {
 		return
 	}
 
-	isError := level == "WARN" || level == "ERROR"
+	isError := level == "ERROR"
 	entry := logEntry{msg: msg, isError: isError}
 	l.flushMu.Lock()
 	l.pendingWG.Add(1)
@@ -369,7 +369,7 @@ func (l *Logger) run() {
 		timestamp := time.Now().Format("2006-01-02 15:04:05.000")
 		fmt.Fprintf(l.writer, "[%s] %s\n", timestamp, entry.msg)
 
-		// Cache error/warn entries in memory for fast extraction
+		// Cache errors for the terminal summary; keep warnings in the log.
 		if entry.isError {
 			l.errorMu.Lock()
 			l.errorEntries = append(l.errorEntries, entry.msg)
@@ -559,8 +559,12 @@ func isUnsafeFile(path string, tempDir string) (bool, string) {
 		return true, fmt.Sprintf("path resolution failed: %v", err)
 	}
 
-	// Get absolute path of tempDir
-	absTempDir, err := filepath.Abs(tempDir)
+	// Normalize both sides identically (e.g. /var -> /private/var on macOS).
+	resolvedTempDir, err := evalSymlinksFn(tempDir)
+	if err != nil {
+		return true, fmt.Sprintf("tempDir resolution failed: %v", err)
+	}
+	absTempDir, err := filepath.Abs(resolvedTempDir)
 	if err != nil {
 		return true, fmt.Sprintf("tempDir resolution failed: %v", err)
 	}

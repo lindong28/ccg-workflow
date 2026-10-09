@@ -931,7 +931,6 @@ func TestLoggerExtractRecentErrors(t *testing.T) {
 			},
 			maxEntries: 10,
 			want: []string{
-				"warning message",
 				"error message",
 			},
 		},
@@ -1071,8 +1070,8 @@ func TestExtractRecentErrorsBoundaryCheck(t *testing.T) {
 
 	// Test positive still works
 	result = logger.ExtractRecentErrors(10)
-	if len(result) != 3 {
-		t.Fatalf("ExtractRecentErrors(10) expected 3 entries, got %d", len(result))
+	if len(result) != 2 {
+		t.Fatalf("ExtractRecentErrors(10) expected 2 ERROR entries, got %d", len(result))
 	}
 }
 

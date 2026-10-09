@@ -58,7 +58,7 @@ export type { SkillMeta } from './skill-registry'
  * Must match the `version` constant in codeagent-wrapper/main.go.
  * When this differs from the installed binary, update triggers re-download.
  */
-const EXPECTED_BINARY_VERSION = '5.9.2+claude-worker.1'
+const EXPECTED_BINARY_VERSION = '5.9.2+claude-worker.2'
 
 // ═══════════════════════════════════════════════════════
 // Install context — shared across sub-functions
@@ -607,6 +607,22 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
     }
 
     const destBinary = join(binDir, process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper')
+
+    // A script or link may be owned by the caller's harness; never replace it.
+    // lstat also detects dangling links, unlike pathExists.
+    try {
+      const target = await fs.lstat(destBinary)
+      if (target.isSymbolicLink() || (target.isFile() && (await fs.readFile(destBinary)).subarray(0, 2).equals(Buffer.from('#!')))) {
+        ctx.result.errors.push(`Preserved externally managed wrapper at ${destBinary}; update it through its owning harness instead.`)
+        ctx.result.binPreservedPath = destBinary
+        ctx.result.success = false
+        return
+      }
+    }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+        throw error
+    }
 
     // Check if binary exists, is functional, AND version matches
     if (await fs.pathExists(destBinary)) {

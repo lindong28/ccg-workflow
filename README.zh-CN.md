@@ -68,6 +68,9 @@ npx ccg-workflow
 PATH=/usr/bin:/bin ~/.claude/bin/codeagent-wrapper --backend codex "Reply exactly: ubuntu-ok"
 ```
 
+Wrapper 源码更新（`5.9.2+claude-worker.2`，尚未发布）：位置任务不读取 stdin，管道输入须显式使用 `-`，以短横线开头的字面任务前使用 `--`。工作目录须已存在且为目录。此 fork 保留安装目标处的脚本和符号链接并提示未验证，请通过其所属 harness 更新这些入口。
+
+
 ### 安装 jq
 
 ```bash

@@ -69,6 +69,9 @@ For non-interactive Ubuntu SSH sessions whose default `PATH` omits user-local CL
 PATH=/usr/bin:/bin ~/.claude/bin/codeagent-wrapper --backend codex "Reply exactly: ubuntu-ok"
 ```
 
+Wrapper source update (`5.9.2+claude-worker.2`, not yet published): a positional task does not consume stdin; use `-` explicitly for piped input and `--` before a literal task starting with a dash. The workdir must be an existing directory. This fork preserves scripts and symlinks at the wrapper installation path and reports them as unverified; update these entries through their owning harness.
+
+
 ### Install jq
 
 ```bash

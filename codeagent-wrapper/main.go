@@ -19,7 +19,7 @@ const (
 	// fork build from an upstream one — which is the single check the consuming repo
 	// relies on to detect a missed vendor. Kept in lockstep with EXPECTED_BINARY_VERSION
 	// in src/utils/installer.ts; version.test.ts asserts the two are equal.
-	version                  = "5.9.2+claude-worker.1"
+	version                  = "5.9.2+claude-worker.2"
 	defaultWorkdir           = "."
 	defaultTimeout           = 21600 // seconds (6 hours)
 	defaultInactivityTimeout = 1800  // seconds (30 minutes)
@@ -258,8 +258,8 @@ func run() (exitCode int) {
 					for _, entry := range errors {
 						fmt.Fprintln(os.Stderr, entry)
 					}
-					fmt.Fprintf(os.Stderr, "Log file: %s (retained)\n", logger.Path())
 				}
+				fmt.Fprintf(os.Stderr, "Log file: %s (retained)\n", logger.Path())
 			}
 			// Keep the log on failure/kill so an externally-terminated run
 			// (SIGTERM → exit 130) stays auditable and resumable; only remove it
@@ -425,6 +425,10 @@ func run() (exitCode int) {
 		logError(err.Error())
 		return 1
 	}
+	if err := validateWorkDir(cfg.WorkDir); err != nil {
+		logError(err.Error())
+		return 1
+	}
 	logInfo(fmt.Sprintf("Parsed args: mode=%s, task_len=%d, backend=%s", cfg.Mode, len(cfg.Task), cfg.Backend))
 
 	// Log environment variable usage
@@ -506,21 +510,9 @@ func run() (exitCode int) {
 		}
 		piped = !isTerminal()
 	} else {
-		pipedTask, err := readPipedTask()
-		if err != nil {
-			logError("Failed to read piped stdin: " + err.Error())
-			return 1
-		}
-		piped = pipedTask != ""
-		if piped {
-			// Inject ROLE_FILE content if present
-			taskText, err = injectRoleFile(pipedTask)
-			if err != nil {
-				logWarn(fmt.Sprintf("Failed to inject ROLE_FILE: %v", err))
-			}
-		} else {
-			taskText = cfg.Task
-		}
+		// A positional task is complete input. Only explicit "-" reads stdin,
+		// so a background pipe without EOF cannot block before dispatch.
+		taskText = cfg.Task
 	}
 
 	useStdin := cfg.ExplicitStdin || shouldUseStdin(taskText, piped)
@@ -585,6 +577,7 @@ func run() (exitCode int) {
 		UseStdin:        useStdin,
 		Progress:        cfg.Progress,
 		SkipPermissions: cfg.SkipPermissions,
+		GeminiModel:     cfg.GeminiModel,
 		CodexModel:      cfg.CodexModel,
 		CodexEffort:     cfg.CodexEffort,
 	}
