@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Sandbox 与更新入口残余修复**（`5.9.2+claude-worker.3`，仅源码）：拒绝非法非空 `CODEX_SANDBOX`，保留空默认与合法值规范化；update 复用安装器的外部 wrapper 识别，在联网与工作流修改前停止，不调用 npm 子安装器。未发布、安装或替换 PATH 入口。
 - **Wrapper 输入与安装边界**（`5.9.2+claude-worker.2`，源码修复，未发布或安装）：位置任务不再读取 stdin；显式 `-` 仍从 stdin 读取。拒绝未知选项和不存在／非目录的工作目录；Gemini 模型选项传入实际执行路径。近期错误摘要只列 ERROR，WARN 仍留日志。临时日志路径比较统一解析两侧别名，不改回收范围。fork 安装器保留外部脚本和链接，明确提示未执行、未验证，不建议强制覆盖。
 
 ### 🐛 修复

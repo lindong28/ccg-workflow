@@ -797,6 +797,15 @@ func generateFinalOutputWithMode(results []TaskResult, summaryOnly bool) string 
 	return sb.String()
 }
 
+func validateCodexSandbox() error {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CODEX_SANDBOX"))) {
+	case "", "read-only", "workspace-write":
+		return nil
+	default:
+		return fmt.Errorf("invalid CODEX_SANDBOX: expected read-only, workspace-write, or empty for the existing default")
+	}
+}
+
 func buildCodexArgs(cfg *Config, targetArg string) []string {
 	if cfg == nil {
 		panic("buildCodexArgs: nil config")
@@ -990,6 +999,14 @@ func runCodexTaskWithContext(parentCtx context.Context, taskSpec TaskSpec, backe
 		cfg.Backend = taskSpec.Backend
 	} else if commandName != "" {
 		cfg.Backend = commandName
+	}
+
+	if cfg.Backend == "codex" {
+		if err := validateCodexSandbox(); err != nil {
+			result.ExitCode = 1
+			result.Error = err.Error()
+			return result
+		}
 	}
 
 	if cfg.Mode == "" {

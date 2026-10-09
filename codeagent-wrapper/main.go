@@ -19,7 +19,7 @@ const (
 	// fork build from an upstream one — which is the single check the consuming repo
 	// relies on to detect a missed vendor. Kept in lockstep with EXPECTED_BINARY_VERSION
 	// in src/utils/installer.ts; version.test.ts asserts the two are equal.
-	version                  = "5.9.2+claude-worker.2"
+	version                  = "5.9.2+claude-worker.3"
 	defaultWorkdir           = "."
 	defaultTimeout           = 21600 // seconds (6 hours)
 	defaultInactivityTimeout = 1800  // seconds (30 minutes)
@@ -445,6 +445,12 @@ func run() (exitCode int) {
 		return 1
 	}
 	cfg.Backend = backend.Name()
+	if cfg.Backend == "codex" {
+		if err := validateCodexSandbox(); err != nil {
+			logError(err.Error())
+			return 1
+		}
+	}
 
 	cmdInjected := codexCommand != defaultCodexCommand
 	argsInjected := buildCodexArgsFn != nil && reflect.ValueOf(buildCodexArgsFn).Pointer() != reflect.ValueOf(defaultBuildArgsFn).Pointer()
@@ -754,8 +760,8 @@ Environment Variables:
                                                  os.TempDir() before parsing, which
                                                  the temp exclusions deny. That
                                                  failure is loud, at startup.
-                               UNSET IS NOT A SANDBOX, and neither is any other
-                               value — those are ignored, and what runs instead is
+                               Invalid nonempty values stop before Codex execution.
+                               UNSET OR EMPTY IS NOT A SANDBOX: what runs instead is
                                decided by CODEX_REQUIRE_APPROVAL: left false (the
                                default) codex is launched with approvals and
                                sandboxing bypassed; set true, no sandbox flag is

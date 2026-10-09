@@ -1,12 +1,14 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const source = await fs.readFile(new URL('../src/utils/installer.ts', import.meta.url), 'utf8');
-const start = source.indexOf('    // A script or link may be owned');
+const helperStart = source.indexOf('export async function isExternallyManagedWrapper');
+const helperEnd = source.indexOf('async function installBinaryFile', helperStart);
+const start = source.indexOf('    if (await isExternallyManagedWrapper(destBinary))');
 const end = source.indexOf('    // Check if binary exists', start);
-assert(start >= 0 && end > start);
-const body = source.slice(start,end).replace('(error as NodeJS.ErrnoException)', 'error');
+assert(helperStart >= 0 && helperEnd > helperStart && start >= 0 && end > start);
+const helper = source.slice(helperStart, helperEnd).replace('export ', '').replace('path: string', 'path').replace(': Promise<boolean>', '').replace('(error as NodeJS.ErrnoException)', 'error');
 const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-const check = new AsyncFunction('fs','ctx','destBinary','Buffer',body+'\nreturn "continue-version-check";');
+const check = new AsyncFunction('fs','ctx','destBinary','Buffer',helper+source.slice(start,end)+'\nreturn "continue-version-check";');
 const cases = [
  {name:'script',header:'#!/bin/sh',link:false,blocked:true},
  {name:'link',header:'',link:true,blocked:true},

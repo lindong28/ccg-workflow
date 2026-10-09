@@ -68,7 +68,7 @@ npx ccg-workflow
 PATH=/usr/bin:/bin ~/.claude/bin/codeagent-wrapper --backend codex "Reply exactly: ubuntu-ok"
 ```
 
-Wrapper 源码更新（`5.9.2+claude-worker.2`，尚未发布）：位置任务不读取 stdin，管道输入须显式使用 `-`，以短横线开头的字面任务前使用 `--`。工作目录须已存在且为目录。此 fork 保留安装目标处的脚本和符号链接并提示未验证，请通过其所属 harness 更新这些入口。
+Wrapper 源码更新（`5.9.2+claude-worker.3`，尚未发布）：位置任务不读取 stdin，管道输入须显式使用 `-`，以短横线开头的字面任务前使用 `--`。工作目录须已存在且为目录。此 fork 保留安装目标处的脚本和符号链接并提示未验证，请通过其所属 harness 更新这些入口。fork 的 update 命令发现外部管理入口或无法检查归属时，在联系 npm 或修改工作流前停止。非法非空 `CODEX_SANDBOX` 会阻止 Codex 执行；空值保留既有缺省行为，合法值仍接受首尾空白和大小写差异。这些源码变更不会替换已安装的 npm CLI 或平台二进制。
 
 
 ### 安装 jq

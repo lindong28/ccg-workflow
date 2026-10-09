@@ -129,20 +129,9 @@ func TestBuildCodexArgs_WorkspaceWriteSandbox(t *testing.T) {
 	})
 }
 
-// TestBuildCodexArgs_SandboxSelectionIsFourWay pins what `--help` now promises
-// about CODEX_SANDBOX. The switch has three cases, so an unrecognised sandbox value
-// does not simply "fall back to the bypass" — with CODEX_REQUIRE_APPROVAL=true
-// none of them fires and codex is launched with no sandbox flag at all, deferring
-// to its own configuration. Documenting only the recognised outcomes would tell a
-// caller they are bypassed when they are not, or sandboxed when they are not.
-//
-// The unrecognised-value sentinel is deliberately a string that will never become a
-// tier. It used to be "workspace-write", which stopped exercising the unrecognised
-// path the moment that value was promoted to a real tier — the case kept passing
-// under its old name while testing something else.
-func TestBuildCodexArgs_SandboxSelectionIsFourWay(t *testing.T) {
+// Recognised values and the empty default retain their existing argument selection.
+func TestBuildCodexArgs_ValidSandboxSelection(t *testing.T) {
 	const bypass = "--dangerously-bypass-approvals-and-sandbox"
-	const unrecognised = "not-a-sandbox-tier"
 
 	cases := []struct {
 		name           string
@@ -156,8 +145,6 @@ func TestBuildCodexArgs_SandboxSelectionIsFourWay(t *testing.T) {
 		{"workspace-write wins over the bypass", "workspace-write", "", true, false},
 		{"workspace-write wins even when approval is required", "workspace-write", "true", true, false},
 		{"unset falls through to the bypass", "", "", false, true},
-		{"unrecognised value falls through to the bypass", unrecognised, "", false, true},
-		{"unrecognised value plus required approval yields neither flag", unrecognised, "true", false, false},
 		{"unset plus required approval yields neither flag", "", "true", false, false},
 	}
 

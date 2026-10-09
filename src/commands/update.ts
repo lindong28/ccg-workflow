@@ -8,7 +8,7 @@ import ora from 'ora'
 import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { checkForUpdates, compareVersions } from '../utils/version'
-import { showBinaryDownloadWarning, verifyBinary } from '../utils/installer'
+import { isExternallyManagedWrapper, showBinaryDownloadWarning, verifyBinary } from '../utils/installer'
 import { readCcgConfig, writeCcgConfig } from '../utils/config'
 import { migrateToV1_4_0, needsMigration } from '../utils/migration'
 import { i18n } from '../i18n'
@@ -19,6 +19,18 @@ const execAsync = promisify(exec)
  * Main update command - checks for updates and installs if available
  */
 export async function update(): Promise<void> {
+  const wrapperPath = join(homedir(), '.claude', 'bin', process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper')
+  try {
+    if (await isExternallyManagedWrapper(wrapperPath)) {
+      console.log(ansis.yellow(`Update not performed: preserved externally managed wrapper at ${wrapperPath}. No workflow or binary was updated; use its owning harness to update this installation.`))
+      return
+    }
+  }
+  catch {
+    console.log(ansis.red(`Update not performed: unable to check wrapper ownership at ${wrapperPath}. No workflow or binary was updated; check access to this path before retrying.`))
+    return
+  }
+
   console.log()
   console.log(ansis.cyan.bold(`🔄 ${i18n.t('update:checking')}`))
   console.log()

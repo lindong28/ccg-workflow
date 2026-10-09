@@ -58,7 +58,7 @@ export type { SkillMeta } from './skill-registry'
  * Must match the `version` constant in codeagent-wrapper/main.go.
  * When this differs from the installed binary, update triggers re-download.
  */
-const EXPECTED_BINARY_VERSION = '5.9.2+claude-worker.2'
+const EXPECTED_BINARY_VERSION = '5.9.2+claude-worker.3'
 
 // ═══════════════════════════════════════════════════════
 // Install context — shared across sub-functions
@@ -590,6 +590,19 @@ export function showBinaryDownloadWarning(binDir: string): void {
   console.log()
 }
 
+export async function isExternallyManagedWrapper(path: string): Promise<boolean> {
+  try {
+    // lstat includes dangling links; do not follow a harness-owned entry.
+    const target = await fs.lstat(path)
+    return target.isSymbolicLink() || (target.isFile() && (await fs.readFile(path)).subarray(0, 2).equals(Buffer.from('#!')))
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return false
+    throw error
+  }
+}
+
 /**
  * Download and install codeagent-wrapper binary for current platform.
  * Skips download if binary already exists and passes `--version` check.
@@ -608,20 +621,11 @@ async function installBinaryFile(ctx: InstallContext): Promise<void> {
 
     const destBinary = join(binDir, process.platform === 'win32' ? 'codeagent-wrapper.exe' : 'codeagent-wrapper')
 
-    // A script or link may be owned by the caller's harness; never replace it.
-    // lstat also detects dangling links, unlike pathExists.
-    try {
-      const target = await fs.lstat(destBinary)
-      if (target.isSymbolicLink() || (target.isFile() && (await fs.readFile(destBinary)).subarray(0, 2).equals(Buffer.from('#!')))) {
-        ctx.result.errors.push(`Preserved externally managed wrapper at ${destBinary}; update it through its owning harness instead.`)
-        ctx.result.binPreservedPath = destBinary
-        ctx.result.success = false
-        return
-      }
-    }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-        throw error
+    if (await isExternallyManagedWrapper(destBinary)) {
+      ctx.result.errors.push(`Preserved externally managed wrapper at ${destBinary}; update it through its owning harness instead.`)
+      ctx.result.binPreservedPath = destBinary
+      ctx.result.success = false
+      return
     }
 
     // Check if binary exists, is functional, AND version matches

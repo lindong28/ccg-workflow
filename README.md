@@ -69,7 +69,7 @@ For non-interactive Ubuntu SSH sessions whose default `PATH` omits user-local CL
 PATH=/usr/bin:/bin ~/.claude/bin/codeagent-wrapper --backend codex "Reply exactly: ubuntu-ok"
 ```
 
-Wrapper source update (`5.9.2+claude-worker.2`, not yet published): a positional task does not consume stdin; use `-` explicitly for piped input and `--` before a literal task starting with a dash. The workdir must be an existing directory. This fork preserves scripts and symlinks at the wrapper installation path and reports them as unverified; update these entries through their owning harness.
+Wrapper source update (`5.9.2+claude-worker.3`, not yet published): a positional task does not consume stdin; use `-` explicitly for piped input and `--` before a literal task starting with a dash. The workdir must be an existing directory. This fork preserves scripts and symlinks at the wrapper installation path and reports them as unverified; update these entries through their owning harness. The fork’s update command stops before contacting npm or changing workflows when that entry is externally managed or cannot be inspected. Invalid nonempty `CODEX_SANDBOX` values stop Codex execution; empty values retain the existing default, and recognised values still accept surrounding whitespace and case differences. These source changes do not replace an installed npm CLI or platform binary.
 
 
 ### Install jq
