@@ -194,8 +194,8 @@
 
 **CCG (Claude + Codex + Gemini)** - 多模型协作系统的核心实现，提供：
 
-1. **多模型协作编排**：固定路由 Gemini（前端）+ Codex（后端）+ Claude（编排）
-2. **28+ 斜杠命令**：开发工作流 + Git 工具 + 项目管理 + OPSX + Agent Teams + Codex 执行 + Skill Registry 自动生成
+1. **多模型协作编排**：默认 Gemini（前端）+ Codex（后端）+ Claude（编排），前后端可分别配置为 Gemini 或 Codex
+2. **29 个核心斜杠命令及技能生成命令**：开发工作流 + Git 工具 + 项目管理 + OPSX + Agent Teams + Codex 执行 + Skill Registry 自动生成
 3. **13 个专家提示词**：Codex 6 个 + Gemini 7 个
 4. **Skill Registry**：SKILL.md frontmatter 驱动，user-invocable 技能自动生成 slash commands
 5. **100+ 技能文件**：6 质量关卡 + 10 域知识秘典（61 文件）+ 20 impeccable 工具 + scrapling + override-refusal
@@ -251,7 +251,9 @@ npx ccg-workflow menu
 | `npx ccg-workflow update` | 更新到最新版本 |
 | `npx ccg-workflow diagnose-mcp` | 诊断 MCP 配置 |
 
-### Slash Commands 接口（17 个）
+### Slash Commands 接口（常用入口）
+
+核心注册表 `src/utils/installer-data.ts` 当前含 29 个命令；以下按用途列常用入口，Skill Registry 另可生成命令。
 
 **开发工作流**：
 | 命令 | 用途 | 模型 |
@@ -303,7 +305,7 @@ npx ccg-workflow menu
 | 后端模型 | Codex | ✓ (v2.1.0+) | init Step 2/4 / 菜单 6 |
 | Gemini 型号 | gemini-3.1-pro-preview | ✓ (v2.1.0+) | 选 gemini 时可配 |
 | 协作模式 | smart | ✗ | 最佳实践 |
-| 命令数量 | 28 个 | ✗ | 全部安装 |
+| 核心命令数量 | 29 个 | 核心全装 | Skill Registry 可扩展；Impeccable 可选 |
 
 ---
 
@@ -362,7 +364,7 @@ src/
 
 ```
 templates/
-├── commands/                  # 27 个斜杠命令
+├── commands/                  # 29 个核心斜杠命令
 │   ├── workflow.md
 │   ├── plan.md                # 多模型协作规划
 │   ├── execute.md             # 多模型协作执行
@@ -385,11 +387,14 @@ templates/
 │   ├── team-plan.md           # Agent Teams 规划
 │   ├── team-exec.md           # Agent Teams 并行实施
 │   ├── team-review.md         # Agent Teams 审查
-│   └── agents/               # 4 个子智能体
+│   └── agents/               # 7 个子智能体
 │       ├── planner.md
 │       ├── ui-ux-designer.md
 │       ├── init-architect.md
-│       └── get-current-datetime.md
+│       ├── get-current-datetime.md
+│       ├── team-architect.md
+│       ├── team-qa.md
+│       └── team-reviewer.md
 ├── prompts/                  # 13 个专家提示词
 │   ├── codex/
 │   └── gemini/
@@ -443,9 +448,9 @@ graph TD
     User["用户"] --> CLI["npx ccg-workflow"]
     CLI --> Init["一键安装"]
     
-    Init --> Commands["~/.claude/commands/ccg/<br/>16 个命令"]
-    Init --> Agents["~/.claude/agents/ccg/<br/>4 个子智能体"]
-    Init --> Skills["~/.claude/skills/<br/>1 个 skill"]
+    Init --> Commands["~/.claude/commands/ccg/<br/>29 个核心命令"]
+    Init --> Agents["~/.claude/agents/ccg/<br/>7 个子智能体"]
+    Init --> Skills["~/.claude/skills/ccg/<br/>所选 skills"]
     Init --> Prompts["~/.claude/.ccg/prompts/<br/>13 个专家提示词"]
     Init --> Binary["~/.claude/bin/<br/>codeagent-wrapper"]
     Init --> MCP["~/.claude.json<br/>MCP 配置（可选）"]

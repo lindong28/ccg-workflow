@@ -4,8 +4,8 @@
 
 ```
 ~/.claude/
-├── commands/ccg/       # 28 command templates
-├── agents/ccg/         # 4 sub-agents
+├── commands/ccg/       # 29 core command templates
+├── agents/ccg/         # 7 sub-agents
 ├── skills/ccg/         # Quality checks + multi-agent orchestration
 ├── bin/codeagent-wrapper
 └── .ccg/
@@ -22,7 +22,7 @@ Set these in `~/.claude/settings.json` under `"env"`:
 | Variable | What it does | Default | When to change |
 |----------|-------------|---------|----------------|
 | `CODEAGENT_POST_MESSAGE_DELAY` | Seconds to wait after Codex finishes | `5` | Process hangs? Set to `1` |
-| `CODEX_TIMEOUT` | Total wrapper timeout (seconds) | `7200` | Very large tasks |
+| `CODEX_TIMEOUT` | Total wrapper timeout | `21600000` ms (6 hours) | Very large tasks |
 | `BASH_DEFAULT_TIMEOUT_MS` | Bash command timeout (ms) | `120000` | Commands timing out |
 | `BASH_MAX_TIMEOUT_MS` | Bash max timeout (ms) | `600000` | Slow builds |
 
@@ -40,16 +40,13 @@ Set these in `~/.claude/settings.json` under `"env"`:
 ```
 :::
 
-## What's hardcoded
+## Model routing and command selection
 
-Since v1.7.0, these are fixed:
+Initialization Step 2/4 and menu option 6 configure the frontend and backend independently, choosing Gemini or Codex. Defaults are Gemini for frontend and Codex for backend; selecting Gemini also exposes its model-name setting. Menu changes reinstall templates to apply the routing. Collaboration mode remains `smart`.
 
-- Frontend model = Gemini (genuinely better at UI/CSS)
-- Backend model = Codex (genuinely better at logic/debugging)
-- Collaboration mode = smart
-- All 28 commands installed
+The core registry in `src/utils/installer-data.ts` contains 29 commands. Skill Registry can add commands; Impeccable commands are optional and disabled by default during initialization. The installed total therefore depends on the selected skills.
 
-We locked these down because testing showed this combo works best. If you disagree, open an Issue — happy to discuss.
+The current wrapper defaults to a six-hour total timeout. `CODEX_TIMEOUT` values above `10000` are interpreted as milliseconds and divided by 1000; positive values up to `10000` are accepted as seconds for compatibility. The example `7200` means two hours. See the repository README for the fork's unpublished wrapper changes and managed-installation boundaries.
 
 ## Utilities
 
